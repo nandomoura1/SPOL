@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppState, OcorrenciaData } from '../../types';
 import { Search, Plus, ArrowRight, ArrowLeft, MapPin, ExternalLink, Loader2, Crosshair } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
@@ -120,45 +120,25 @@ export const Step1Login: React.FC<StepProps> = ({ state, updateState, nextStep }
 // --- Step 2: Occurrence (Tela Ocorrência) ---
 export const Step2Occurrence: React.FC<StepProps> = ({ state, updateState, nextStep, prevStep }) => {
   const [numOcorrencia, setNumOcorrencia] = useState(state.num_ocorrencia);
-  const [localManual, setLocalManual] = useState(state.ocorrencia?.local || "");
-  const [gpsData, setGpsData] = useState(state.ocorrencia?.gps || "");
-  const [loadingGps, setLoadingGps] = useState(false);
+  const [dp, setDp] = useState(state.ocorrencia?.dp || "");
+  const [ano, setAno] = useState(state.ocorrencia?.ano || new Date().getFullYear().toString());
   
   const handleSearch = async () => {
      // Simulate fetch or Create new
      if (numOcorrencia) {
         const mockData: OcorrenciaData = {
+            num_ocorrencia: numOcorrencia,
+            dp: dp,
+            ano: ano,
             data_hora: state.ocorrencia?.data_hora || new Date().toLocaleString('pt-BR'),
-            local: localManual || "Local não informado",
-            gps: gpsData,
+            local: state.ocorrencia?.local || "",
+            gps: state.ocorrencia?.gps || "",
             natureza: "Homicídio",
             equipe_padrao: ["Perito João (12345)", "Auxiliar Maria (67890)"]
         };
         updateState({ ocorrencia: mockData, num_ocorrencia: numOcorrencia });
         nextStep();
      }
-  };
-
-  const getGpsLocation = () => {
-    if (!navigator.geolocation) {
-      alert("Geolocalização não suportada pelo seu navegador.");
-      return;
-    }
-    setLoadingGps(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const coords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-        setGpsData(coords);
-        setLoadingGps(false);
-      },
-      (error) => {
-        console.error(error);
-        alert("Erro ao obter localização.");
-        setLoadingGps(false);
-      },
-      { enableHighAccuracy: true }
-    );
   };
 
   return (
@@ -178,40 +158,22 @@ export const Step2Occurrence: React.FC<StepProps> = ({ state, updateState, nextS
         </div>
 
         <div>
-            <label className="block text-neutral-400 text-sm mb-2 ml-1">Local do Fato</label>
+            <label className="block text-neutral-400 text-sm mb-2 ml-1">Delegacia (DP)</label>
             <input
                 type="text"
-                value={localManual}
-                onChange={(e) => setLocalManual(e.target.value)}
-                className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none mb-2"
-                placeholder="Endereço exato"
+                value={dp}
+                onChange={(e) => setDp(e.target.value)}
+                className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none"
+                placeholder="Ex: 1ª DP"
             />
-            <div className="flex gap-2">
-                <div className="relative flex-1">
-                    <input
-                        type="text"
-                        value={gpsData}
-                        readOnly
-                        className="w-full bg-neutral-900 border border-neutral-800 text-yellow-500 text-xs rounded-lg py-3 px-4 pl-9 focus:outline-none"
-                        placeholder="Coordenadas GPS"
-                    />
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-                </div>
-                <button 
-                    onClick={getGpsLocation}
-                    disabled={loadingGps}
-                    className="bg-neutral-800 text-yellow-500 px-4 rounded-lg flex items-center justify-center hover:bg-neutral-700 transition-colors border border-neutral-700"
-                    title="Obter localização atual"
-                >
-                    {loadingGps ? <Loader2 className="w-5 h-5 animate-spin" /> : <Crosshair className="w-5 h-5" />}
-                </button>
-            </div>
         </div>
 
         <div>
             <label className="block text-neutral-400 text-sm mb-2 ml-1">Ano</label>
             <input
                 type="text"
+                value={ano}
+                onChange={(e) => setAno(e.target.value)}
                 className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none"
                 placeholder="2024"
             />
@@ -245,9 +207,47 @@ export const Step3Team: React.FC<StepProps> = ({ state, updateState, nextStep, p
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string>("");
   const [mapLinks, setMapLinks] = useState<any[]>([]);
+  const [local, setLocal] = useState(ocorrencia?.local || "");
+  const [gpsData, setGpsData] = useState(ocorrencia?.gps || "");
+  const [loadingGps, setLoadingGps] = useState(false);
+
+  // Sync internal state with global on mount/update
+  useEffect(() => {
+    setLocal(ocorrencia?.local || "");
+    setGpsData(ocorrencia?.gps || "");
+  }, [ocorrencia?.local, ocorrencia?.gps]);
+
+  const updateGlobalOcorrencia = (updates: Partial<OcorrenciaData>) => {
+      if (ocorrencia) {
+          updateState({ ocorrencia: { ...ocorrencia, ...updates } });
+      }
+  };
+
+  const getGpsLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocalização não suportada pelo seu navegador.");
+      return;
+    }
+    setLoadingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const coords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        setGpsData(coords);
+        updateGlobalOcorrencia({ gps: coords });
+        setLoadingGps(false);
+      },
+      (error) => {
+        console.error(error);
+        alert("Erro ao obter localização.");
+        setLoadingGps(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
 
   const handleAnalyzeLocation = async () => {
-    if (!ocorrencia?.local) return;
+    if (!local) return;
     
     setAnalyzing(true);
     setAnalysisResult("");
@@ -255,7 +255,7 @@ export const Step3Team: React.FC<StepProps> = ({ state, updateState, nextStep, p
     
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const locationContext = ocorrencia.gps ? `${ocorrencia.local} (GPS: ${ocorrencia.gps})` : ocorrencia.local;
+        const locationContext = gpsData ? `${local} (GPS: ${gpsData})` : local;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
@@ -287,57 +287,83 @@ export const Step3Team: React.FC<StepProps> = ({ state, updateState, nextStep, p
       <div className="space-y-5 flex-1 overflow-y-auto scrollbar-hide pb-4">
         <div>
             <label className="block text-neutral-400 text-sm mb-2 ml-1">Número da Ocorrência Policial</label>
-            <input
-                readOnly
-                value={state.num_ocorrencia}
-                className="w-full bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-lg py-3 px-4 focus:outline-none"
-            />
+            <div className="flex gap-2">
+                <input
+                    readOnly
+                    value={state.num_ocorrencia}
+                    className="flex-1 bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-lg py-3 px-4 focus:outline-none"
+                />
+                 <input
+                    readOnly
+                    value={ocorrencia?.dp || "DP"}
+                    className="w-24 bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-lg py-3 px-4 focus:outline-none text-center"
+                />
+            </div>
         </div>
 
         <div>
-            <label className="block text-neutral-400 text-sm mb-2 ml-1">Local do Fato</label>
-            <div className="w-full bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-lg py-3 px-4 min-h-[3rem] flex flex-col justify-center">
-               <span>{ocorrencia?.local || "---"}</span>
-               {ocorrencia?.gps && (
-                 <span className="text-yellow-600/80 text-xs flex items-center mt-1">
-                    <MapPin className="w-3 h-3 mr-1" />
-                    GPS: {ocorrencia.gps}
-                 </span>
-               )}
+            <label className="block text-neutral-400 text-sm mb-2 ml-1">Endereço / Local do Fato</label>
+            <input
+                type="text"
+                value={local}
+                onChange={(e) => {
+                    setLocal(e.target.value);
+                    updateGlobalOcorrencia({ local: e.target.value });
+                }}
+                className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none mb-2"
+                placeholder="Endereço completo"
+            />
+            
+            <div className="flex gap-2 mb-3">
+                <div className="relative flex-1">
+                    <input
+                        type="text"
+                        value={gpsData}
+                        readOnly
+                        className="w-full bg-neutral-900 border border-neutral-800 text-yellow-500 text-xs rounded-lg py-3 px-4 pl-9 focus:outline-none"
+                        placeholder="Coordenadas GPS"
+                    />
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                </div>
+                <button 
+                    onClick={getGpsLocation}
+                    disabled={loadingGps}
+                    className="bg-neutral-800 text-yellow-500 px-4 rounded-lg flex items-center justify-center hover:bg-neutral-700 transition-colors border border-neutral-700"
+                    title="Obter localização atual"
+                >
+                    {loadingGps ? <Loader2 className="w-5 h-5 animate-spin" /> : <Crosshair className="w-5 h-5" />}
+                </button>
             </div>
-            {ocorrencia?.local && (
-                <div className="mt-2">
-                    <button 
-                        onClick={handleAnalyzeLocation}
-                        disabled={analyzing}
-                        className="flex items-center space-x-2 text-[10px] text-yellow-500 font-bold uppercase bg-yellow-500/10 px-3 py-2 rounded hover:bg-yellow-500/20 transition-colors w-full justify-center"
-                    >
-                        {analyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
-                        <span>{analyzing ? "Analisando com Gemini..." : "Consultar Inteligência de Local (Gemini)"}</span>
-                    </button>
+
+            <button 
+                onClick={handleAnalyzeLocation}
+                disabled={analyzing || !local}
+                className="flex items-center space-x-2 text-[10px] text-yellow-500 font-bold uppercase bg-yellow-500/10 px-3 py-2 rounded hover:bg-yellow-500/20 transition-colors w-full justify-center"
+            >
+                {analyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
+                <span>{analyzing ? "Analisando com Gemini..." : "Consultar Inteligência de Local (Gemini)"}</span>
+            </button>
+            
+            {analysisResult && (
+                <div className="mt-3 bg-neutral-800/50 p-3 rounded-lg border border-neutral-700">
+                    <p className="text-xs text-neutral-300 leading-relaxed">{analysisResult}</p>
                     
-                    {analysisResult && (
-                        <div className="mt-3 bg-neutral-800/50 p-3 rounded-lg border border-neutral-700">
-                            <p className="text-xs text-neutral-300 leading-relaxed">{analysisResult}</p>
-                            
-                            {mapLinks.length > 0 && (
-                                <div className="mt-2 pt-2 border-t border-neutral-700">
-                                    <p className="text-[10px] text-neutral-500 uppercase font-bold mb-1">Referências de Mapa:</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {mapLinks.map((chunk, i) => {
-                                            if (chunk.web?.uri) {
-                                                return (
-                                                    <a key={i} href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-1 text-xs text-yellow-500 hover:underline bg-black/30 px-2 py-1 rounded">
-                                                        <span>{chunk.web.title || "Ver no Mapa"}</span>
-                                                        <ExternalLink className="w-3 h-3" />
-                                                    </a>
-                                                );
-                                            }
-                                            return null;
-                                        })}
-                                    </div>
-                                </div>
-                            )}
+                    {mapLinks.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-neutral-700">
+                            <p className="text-[10px] text-neutral-500 uppercase font-bold mb-1">Referências de Mapa:</p>
+                            <div className="flex flex-wrap gap-2">
+                                {mapLinks.map((chunk, i) => {
+                                    if (chunk.web?.uri) {
+                                        return (
+                                            <a key={i} href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="flex items-center space-x-1 text-xs text-yellow-500 hover:underline bg-black/30 px-2 py-1 rounded">
+                                                <span>{chunk.web.title || "Ver no Mapa"}</span>
+                                                <ExternalLink className="w-3 h-3" />
+                                            </a>
+                                        );
+                                    }
+                                    return null;
+                                })}
+                            </div>
                         </div>
                     )}
                 </div>

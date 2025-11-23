@@ -35,6 +35,9 @@ export interface ArquivoGeral {
 }
 
 export interface OcorrenciaData {
+  num_ocorrencia?: string; // Adicionado para persistência local se necessário
+  dp?: string;
+  ano?: string;
   data_hora: string;
   local: string;
   gps?: string;
