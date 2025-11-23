@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import { AppState, VestigioDecalcado, FotoFIP } from '../../types';
-import { calculateSHA256, generateId } from '../../utils';
+import { AppState, VestigioDecalcado, FotoFIP, ArquivoGeral } from '../../types';
+import { calculateSHA256, generateId, formatDateTime } from '../../utils';
 import { ScreenHeader, BottomNav } from './AuthAndInfo';
-import { Printer, UploadCloud, FileText, X, ShieldCheck, Copy, Check, Wand2, Loader2 } from 'lucide-react';
+import { Printer, UploadCloud, FileText, X, ShieldCheck, Copy, Check, Wand2, Loader2, File as FileIcon } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { LOGO_URL } from '../../utils';
 
@@ -42,7 +42,8 @@ const ToggleSimNao = ({ value, onChange }: { value: 'Sim' | 'Não', onChange: (v
 
 // --- Step 4: Vestígio Decalcado ---
 export const Step4Decal: React.FC<StepProps> = ({ state, updateState, nextStep, prevStep }) => {
-  const [formData, setFormData] = useState({ descricao: '', numeracao_fitas: '', qtd: 1 });
+  const [formData, setFormData] = useState({ descricao: '', numeracao_fitas: '', numeracao_suportes: '', qtd: 1 });
+  const [processingFiles, setProcessingFiles] = useState(false);
 
   const addVestigio = () => {
     if (formData.descricao && formData.numeracao_fitas) {
@@ -50,16 +51,44 @@ export const Step4Decal: React.FC<StepProps> = ({ state, updateState, nextStep, 
         id: generateId(),
         descricao: formData.descricao,
         numeracao_fitas: formData.numeracao_fitas,
-        suportes: 1, // Default
+        numeracao_suportes: formData.numeracao_suportes,
         quantidade: formData.qtd
       };
       updateState({ vestigios_decalcados: [...state.vestigios_decalcados, newItem] });
-      setFormData({ descricao: '', numeracao_fitas: '', qtd: 1 });
+      setFormData({ descricao: '', numeracao_fitas: '', numeracao_suportes: '', qtd: 1 });
     }
   };
 
   const removeVestigio = (id: string) => {
     updateState({ vestigios_decalcados: state.vestigios_decalcados.filter(v => v.id !== id) });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setProcessingFiles(true);
+      try {
+        const filePromises = (Array.from(e.target.files) as File[]).map(async (file) => {
+          const hash = await calculateSHA256(file);
+          return {
+            id: generateId(),
+            nome: file.name,
+            hash: hash,
+            data: formatDateTime()
+          } as ArquivoGeral;
+        });
+
+        const newFiles = await Promise.all(filePromises);
+        updateState({ anexos_vestigios: [...(state.anexos_vestigios || []), ...newFiles] });
+      } catch (error) {
+        console.error("Erro ao processar arquivos:", error);
+      } finally {
+        setProcessingFiles(false);
+      }
+    }
+  };
+
+  const removeFile = (id: string) => {
+    updateState({ anexos_vestigios: state.anexos_vestigios.filter(f => f.id !== id) });
   };
 
   return (
@@ -82,9 +111,7 @@ export const Step4Decal: React.FC<StepProps> = ({ state, updateState, nextStep, 
                     />
                 </div>
 
-                {/* Local Field Removed as requested */}
-
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                     <div>
                         <label className="block text-neutral-400 text-sm mb-2 ml-1">Quantidade</label>
                         <input 
@@ -96,13 +123,23 @@ export const Step4Decal: React.FC<StepProps> = ({ state, updateState, nextStep, 
                         />
                     </div>
                     <div>
-                        <label className="block text-neutral-400 text-sm mb-2 ml-1">Numeração da Fita</label>
+                        <label className="block text-neutral-400 text-sm mb-2 ml-1">Num. da Fita</label>
                         <input 
                             type="text" 
                             value={formData.numeracao_fitas}
                             onChange={(e) => setFormData({ ...formData, numeracao_fitas: e.target.value })}
                             className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none text-center"
-                            placeholder="Ex: 1-5 ou 10, 12"
+                            placeholder="Ex: 1-5"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-neutral-400 text-sm mb-2 ml-1">Num. Suporte</label>
+                        <input 
+                            type="text" 
+                            value={formData.numeracao_suportes}
+                            onChange={(e) => setFormData({ ...formData, numeracao_suportes: e.target.value })}
+                            className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none text-center"
+                            placeholder="Ex: S1"
                         />
                     </div>
                 </div>
@@ -123,7 +160,10 @@ export const Step4Decal: React.FC<StepProps> = ({ state, updateState, nextStep, 
                          {state.vestigios_decalcados.map((item, i) => (
                            <div key={item.id} className="text-sm text-neutral-300 border-b border-neutral-800 last:border-0 py-2 flex justify-between items-center group">
                              <div className="flex flex-col">
-                                <span className="font-bold text-yellow-500">Fita(s): {item.numeracao_fitas}</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-bold text-yellow-500">Fita: {item.numeracao_fitas}</span>
+                                    {item.numeracao_suportes && <span className="text-xs text-neutral-500">| Suporte: {item.numeracao_suportes}</span>}
+                                </div>
                                 <span>{item.quantidade}x {item.descricao}</span>
                              </div>
                              <button onClick={() => removeVestigio(item.id)} className="text-neutral-600 hover:text-red-500 p-1">
@@ -132,6 +172,39 @@ export const Step4Decal: React.FC<StepProps> = ({ state, updateState, nextStep, 
                            </div>
                          ))}
                       </div>
+                    )}
+                </div>
+
+                {/* Upload Section for Decals */}
+                <div className="mt-6 pt-4 border-t border-neutral-800">
+                    <p className="text-neutral-400 text-sm mb-2 uppercase font-bold">Upload de Arquivos (Scans)</p>
+                    <label className="block w-full border border-dashed border-yellow-500/30 bg-neutral-800/50 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-neutral-800 transition-colors">
+                        <UploadCloud className="w-6 h-6 text-yellow-500 mb-2" />
+                        <span className="text-yellow-500 font-bold text-xs uppercase">
+                        {processingFiles ? 'Processando...' : 'Anexar Decalques Escaneados'}
+                        </span>
+                        <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={processingFiles} />
+                    </label>
+
+                     {state.anexos_vestigios && state.anexos_vestigios.length > 0 && (
+                         <div className="mt-4 space-y-2">
+                            <div className="bg-neutral-900 rounded-lg border border-neutral-800 divide-y divide-neutral-800 max-h-32 overflow-y-auto">
+                                {state.anexos_vestigios.map((file) => (
+                                    <div key={file.id} className="p-3 flex items-center justify-between group hover:bg-neutral-800/50 transition-colors">
+                                        <div className="flex items-center overflow-hidden">
+                                            <FileIcon className="w-4 h-4 text-neutral-500 mr-3 flex-shrink-0" />
+                                            <span className="text-sm text-neutral-300 truncate">{file.nome}</span>
+                                        </div>
+                                        <button 
+                                            onClick={() => removeFile(file.id)}
+                                            className="text-neutral-600 hover:text-red-500 p-1 rounded transition-colors"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                         </div>
                     )}
                 </div>
             </div>
@@ -146,7 +219,6 @@ export const Step4Decal: React.FC<StepProps> = ({ state, updateState, nextStep, 
 // --- Step 5: FIP ---
 export const Step5FIP: React.FC<StepProps> = ({ state, updateState, nextStep, prevStep }) => {
   const [descricao, setDescricao] = useState('');
-  const [local, setLocal] = useState('');
   const [numVestigio, setNumVestigio] = useState('');
   const [processing, setProcessing] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -186,7 +258,7 @@ export const Step5FIP: React.FC<StepProps> = ({ state, updateState, nextStep, pr
             hash,
             nome_arquivo: file.name,
             numero_vestigio: numVestigio ? `${numVestigio}.${i+1}` : currentCount.toString(), // simple logic for numbering
-            local: local,
+            local: '',
             imageData: base64,
             mimeType: file.type
           });
@@ -195,7 +267,6 @@ export const Step5FIP: React.FC<StepProps> = ({ state, updateState, nextStep, pr
       updateState({ fotos_fip: [...state.fotos_fip, ...newPhotos] });
       setDescricao(''); // Reset inputs used for batch
       setNumVestigio('');
-      setLocal('');
       setProcessing(false);
     }
   };
@@ -300,17 +371,6 @@ export const Step5FIP: React.FC<StepProps> = ({ state, updateState, nextStep, pr
                                 onChange={(e) => setDescricao(e.target.value)}
                                 className="w-full bg-neutral-800 text-white text-sm rounded-lg py-3 px-4 focus:outline-none focus:ring-1 focus:ring-yellow-500 border-none"
                                 placeholder="Ex: Pegada no gesso (aplicado a todas as fotos)"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-neutral-400 text-[10px] mb-1 uppercase font-bold ml-1">Local Padrão</label>
-                            <input
-                                type="text"
-                                value={local}
-                                onChange={(e) => setLocal(e.target.value)}
-                                className="w-full bg-neutral-800 text-white text-sm rounded-lg py-3 px-4 focus:outline-none focus:ring-1 focus:ring-yellow-500 border-none"
-                                placeholder="Local exato..."
                             />
                         </div>
 

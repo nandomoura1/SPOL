@@ -3,7 +3,7 @@ export interface VestigioDecalcado {
   id: string;
   descricao: string;
   numeracao_fitas: string;
-  suportes: number;
+  numeracao_suportes: string;
   quantidade?: number;
 }
 
@@ -48,7 +48,8 @@ export interface OcorrenciaData {
 export interface ObservacoesData {
   poeira: boolean;
   umidade: boolean;
-  lapso: number;
+  lapso: boolean;
+  lapso_periodo: string;
   texto: string;
 }
 
@@ -66,6 +67,7 @@ export interface AppState {
   };
   houve_decalque: 'Sim' | 'Não';
   vestigios_decalcados: VestigioDecalcado[];
+  anexos_vestigios: ArquivoGeral[];
   houve_fip: 'Sim' | 'Não';
   fotos_fip: FotoFIP[];
   houve_lab: 'Sim' | 'Não';
@@ -88,6 +90,7 @@ export const INITIAL_STATE: AppState = {
   },
   houve_decalque: 'Não',
   vestigios_decalcados: [],
+  anexos_vestigios: [],
   houve_fip: 'Não',
   fotos_fip: [],
   houve_lab: 'Não',
@@ -95,7 +98,8 @@ export const INITIAL_STATE: AppState = {
   observacoes: {
     poeira: false,
     umidade: false,
-    lapso: 0,
+    lapso: false,
+    lapso_periodo: '',
     texto: ''
   },
   uploads: []

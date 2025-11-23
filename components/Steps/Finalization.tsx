@@ -23,7 +23,7 @@ interface StepProps {
 
 // Custom Checkbox
 const CheckItem = ({ label, checked, onChange }: { label: string, checked: boolean, onChange: () => void }) => (
-  <div onClick={onChange} className="flex items-start cursor-pointer group mb-4">
+  <div onClick={onChange} className="flex items-start cursor-pointer group mb-4 select-none">
     <div className={`mr-3 mt-0.5 w-5 h-5 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${checked ? 'bg-yellow-500 border-yellow-500' : 'border-yellow-500/50 bg-transparent group-hover:border-yellow-500'}`}>
       {checked && <div className="w-2.5 h-2.5 bg-black rounded-sm" />}
     </div>
@@ -94,9 +94,9 @@ export const Step7Observations: React.FC<StepProps> = ({ state, updateState, nex
     setIsSummarizing(true);
     try {
         const conditions = [];
+        if (state.observacoes.umidade) conditions.push("As superfícies primárias de baixa qualidade ou prejudicadas.");
         if (state.observacoes.poeira) conditions.push("O ambiente apresentava acúmulo de poeira.");
-        if (state.observacoes.lapso > 0) conditions.push("Houve lapso temporal significativo entre o fato ocorrido e o início do exame pericial.");
-        if (state.observacoes.umidade) conditions.push("As superfícies encontravam-se prejudicadas devido à umidade ou má conservação.");
+        if (state.observacoes.lapso) conditions.push(`Houve lapso temporal significativo (${state.observacoes.lapso_periodo || 'não especificado'}) entre o fato ocorrido e o início do exame pericial.`);
         
         const userInput = state.observacoes.texto;
 
@@ -132,28 +132,49 @@ export const Step7Observations: React.FC<StepProps> = ({ state, updateState, nex
       <ScreenHeader title="Observações" />
 
       <div className="flex-1 overflow-y-auto scrollbar-hide pb-4">
-        <div className="mb-6">
-            <label className="block text-neutral-400 text-sm mb-3">Descrição do Local</label>
+        <div className="mb-6 space-y-2">
+            <label className="block text-neutral-400 text-sm mb-3 font-bold uppercase">Descrição do Local</label>
             
+            {/* 1. Suporte Primário (Moved to top) */}
+            <CheckItem 
+                label="Suporte primário de baixa qualidade ou prejudicado" 
+                checked={state.observacoes.umidade} 
+                onChange={() => updateState({ observacoes: { ...state.observacoes, umidade: !state.observacoes.umidade } })} 
+            />
+
+            {/* 2. Poeira */}
             <CheckItem 
                 label="Local empoeirado" 
                 checked={state.observacoes.poeira} 
                 onChange={() => updateState({ observacoes: { ...state.observacoes, poeira: !state.observacoes.poeira } })} 
             />
-            <CheckItem 
-                label="Lapso temporal entre o fato e a perícia" 
-                checked={state.observacoes.lapso > 0} 
-                onChange={() => updateState({ observacoes: { ...state.observacoes, lapso: state.observacoes.lapso ? 0 : 1 } })} 
-            />
+
+            {/* 3. Lapso Temporal */}
+            <div className="mb-4">
+                <CheckItem 
+                    label="Lapso temporal entre o fato e a perícia" 
+                    checked={state.observacoes.lapso} 
+                    onChange={() => updateState({ observacoes: { ...state.observacoes, lapso: !state.observacoes.lapso } })} 
+                />
+                
+                {state.observacoes.lapso && (
+                    <div className="ml-8 -mt-2 animate-fade-in">
+                        <input
+                            type="text"
+                            placeholder="Informe o prazo (ex: 5 dias, 48 horas)"
+                            value={state.observacoes.lapso_periodo}
+                            onChange={(e) => updateState({ observacoes: { ...state.observacoes, lapso_periodo: e.target.value } })}
+                            className="w-full bg-neutral-800 border border-neutral-700 text-white rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500 placeholder-neutral-500"
+                        />
+                    </div>
+                )}
+            </div>
+
+            {/* 4. Arremesso (Static example) */}
             <CheckItem 
                 label="Arremesso de projétil não gerou vestígio em superfície viável" 
                 checked={false} 
                 onChange={() => {}} 
-            />
-            <CheckItem 
-                label="Superfícies primárias de baixa qualidade ou prejudicadas" 
-                checked={state.observacoes.umidade} 
-                onChange={() => updateState({ observacoes: { ...state.observacoes, umidade: !state.observacoes.umidade } })} 
             />
         </div>
 
@@ -255,9 +276,13 @@ export const Step8Report: React.FC<StepProps> = ({ state, prevStep }) => {
         }
 
         const parts = [];
+        if (state.observacoes.umidade) parts.push("O suporte primário apresentava baixa qualidade ou estava prejudicado");
         if (state.observacoes.poeira) parts.push("O local apresentava muita poeira");
-        if (state.observacoes.lapso) parts.push("Havia lapso temporal entre o fato e a perícia");
-        if (state.observacoes.umidade) parts.push("As superfícies primárias eram de baixa qualidade ou prejudicadas");
+        if (state.observacoes.lapso) {
+            const periodo = state.observacoes.lapso_periodo ? `de ${state.observacoes.lapso_periodo}` : '';
+            parts.push(`Havia lapso temporal ${periodo} entre o fato e a perícia`);
+        }
+        
         return parts.length > 0 ? parts.join(". ") + "." : "Nada a constar.";
     };
 
@@ -267,9 +292,10 @@ export const Step8Report: React.FC<StepProps> = ({ state, prevStep }) => {
         // Count total items (quantity)
         const total = state.vestigios_decalcados.reduce((acc, curr) => acc + (curr.quantidade || 1), 0); 
         
-        const items = state.vestigios_decalcados.map((v) => 
-            `(Fitas: ${v.numeracao_fitas}) ${v.descricao}`
-        );
+        const items = state.vestigios_decalcados.map((v) => {
+            const suporteText = v.numeracao_suportes ? ` | Suporte: ${v.numeracao_suportes}` : '';
+            return `(Fitas: ${v.numeracao_fitas}${suporteText}) ${v.descricao}`;
+        });
         
         return (
             <div className="mt-1">
@@ -277,6 +303,11 @@ export const Step8Report: React.FC<StepProps> = ({ state, prevStep }) => {
                 <ul className="list-none mt-1">
                     {items.map((item, idx) => <li key={idx} className="pl-0">{item}</li>)}
                 </ul>
+                {state.anexos_vestigios && state.anexos_vestigios.length > 0 && (
+                    <div className="mt-2 text-xs text-gray-600">
+                        * Constam {state.anexos_vestigios.length} arquivos de decalques escaneados em anexo digital.
+                    </div>
+                )}
             </div>
         );
     };

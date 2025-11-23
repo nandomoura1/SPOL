@@ -210,6 +210,7 @@ export const Step3Team: React.FC<StepProps> = ({ state, updateState, nextStep, p
   const [local, setLocal] = useState(ocorrencia?.local || "");
   const [gpsData, setGpsData] = useState(ocorrencia?.gps || "");
   const [loadingGps, setLoadingGps] = useState(false);
+  const [loadingAddress, setLoadingAddress] = useState(false);
 
   // Sync internal state with global on mount/update
   useEffect(() => {
@@ -229,18 +230,54 @@ export const Step3Team: React.FC<StepProps> = ({ state, updateState, nextStep, p
       return;
     }
     setLoadingGps(true);
+    setLoadingAddress(true); // Start loading address expectation
+
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const { latitude, longitude } = position.coords;
         const coords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        
+        // 1. Update GPS
         setGpsData(coords);
         updateGlobalOcorrencia({ gps: coords });
         setLoadingGps(false);
+
+        // 2. Reverse Geocode with Gemini Maps Tool
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: `Qual é o endereço postal completo (Logradouro, Número se houver, Bairro, Cidade) para as coordenadas: ${latitude}, ${longitude}? Retorne apenas o endereço por extenso, sem explicações.`,
+                config: {
+                    tools: [{ googleMaps: {} }],
+                    toolConfig: {
+                        retrievalConfig: {
+                            latLng: {
+                                latitude: latitude,
+                                longitude: longitude
+                            }
+                        }
+                    }
+                }
+            });
+
+            const address = response.text?.trim();
+            if (address) {
+                setLocal(address);
+                updateGlobalOcorrencia({ local: address });
+            }
+        } catch (error) {
+            console.error("Erro no Reverse Geocoding:", error);
+            // Optionally set an error state or just leave the field as is
+        } finally {
+            setLoadingAddress(false);
+        }
       },
       (error) => {
         console.error(error);
         alert("Erro ao obter localização.");
         setLoadingGps(false);
+        setLoadingAddress(false);
       },
       { enableHighAccuracy: true }
     );
@@ -303,16 +340,24 @@ export const Step3Team: React.FC<StepProps> = ({ state, updateState, nextStep, p
 
         <div>
             <label className="block text-neutral-400 text-sm mb-2 ml-1">Endereço / Local do Fato</label>
-            <input
-                type="text"
-                value={local}
-                onChange={(e) => {
-                    setLocal(e.target.value);
-                    updateGlobalOcorrencia({ local: e.target.value });
-                }}
-                className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none mb-2"
-                placeholder="Endereço completo"
-            />
+            <div className="relative">
+                <input
+                    type="text"
+                    value={local}
+                    onChange={(e) => {
+                        setLocal(e.target.value);
+                        updateGlobalOcorrencia({ local: e.target.value });
+                    }}
+                    disabled={loadingAddress}
+                    className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none mb-2 disabled:opacity-70"
+                    placeholder="Endereço completo"
+                />
+                {loadingAddress && (
+                    <div className="absolute right-3 top-4 text-yellow-500">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                    </div>
+                )}
+            </div>
             
             <div className="flex gap-2 mb-3">
                 <div className="relative flex-1">
@@ -328,10 +373,11 @@ export const Step3Team: React.FC<StepProps> = ({ state, updateState, nextStep, p
                 <button 
                     onClick={getGpsLocation}
                     disabled={loadingGps}
-                    className="bg-neutral-800 text-yellow-500 px-4 rounded-lg flex items-center justify-center hover:bg-neutral-700 transition-colors border border-neutral-700"
-                    title="Obter localização atual"
+                    className="bg-neutral-800 text-yellow-500 px-4 rounded-lg flex items-center justify-center hover:bg-neutral-700 transition-colors border border-neutral-700 space-x-2"
+                    title="Obter localização e endereço"
                 >
                     {loadingGps ? <Loader2 className="w-5 h-5 animate-spin" /> : <Crosshair className="w-5 h-5" />}
+                    <span className="text-xs uppercase font-bold hidden sm:inline">GPS + Endereço</span>
                 </button>
             </div>
 
