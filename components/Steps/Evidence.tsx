@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { AppState, VestigioDecalcado, FotoFIP } from '../../types';
 import { calculateSHA256, generateId } from '../../utils';
@@ -41,30 +42,25 @@ const ToggleSimNao = ({ value, onChange }: { value: 'Sim' | 'Não', onChange: (v
 
 // --- Step 4: Vestígio Decalcado ---
 export const Step4Decal: React.FC<StepProps> = ({ state, updateState, nextStep, prevStep }) => {
-  const [formData, setFormData] = useState({ descricao: '', fitas: 1, local: '', qtd: 1 });
+  const [formData, setFormData] = useState({ descricao: '', numeracao_fitas: '', qtd: 1 });
 
   const addVestigio = () => {
-    if (formData.descricao) {
-      // Logic to add multiple items if qtd > 1, or just represent it as one record
-      // For this implementation, we will add one record representing the batch or single item
+    if (formData.descricao && formData.numeracao_fitas) {
       const newItem: VestigioDecalcado = {
         id: generateId(),
         descricao: formData.descricao,
-        fitas: formData.fitas,
+        numeracao_fitas: formData.numeracao_fitas,
         suportes: 1, // Default
-        local: formData.local,
         quantidade: formData.qtd
       };
       updateState({ vestigios_decalcados: [...state.vestigios_decalcados, newItem] });
-      setFormData({ descricao: '', fitas: 1, local: '', qtd: 1 });
+      setFormData({ descricao: '', numeracao_fitas: '', qtd: 1 });
     }
   };
 
   const removeVestigio = (id: string) => {
     updateState({ vestigios_decalcados: state.vestigios_decalcados.filter(v => v.id !== id) });
   };
-
-  const totalFitas = state.vestigios_decalcados.reduce((acc, curr) => acc + curr.fitas, 0);
 
   return (
     <div className="flex flex-col h-full">
@@ -76,26 +72,17 @@ export const Step4Decal: React.FC<StepProps> = ({ state, updateState, nextStep, 
         {state.houve_decalque === 'Sim' && (
             <div className="space-y-5 animate-fade-in">
                 <div>
-                    <label className="block text-neutral-400 text-sm mb-2 ml-1">Descrição do Vestígio</label>
+                    <label className="block text-neutral-400 text-sm mb-2 ml-1">Descrição do Vestígio (incluir local)</label>
                     <input
                         type="text"
                         value={formData.descricao}
                         onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
                         className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none"
-                        placeholder="Ex: Impressão digital..."
+                        placeholder="Ex: Impressão digital na janela da cozinha..."
                     />
                 </div>
 
-                <div>
-                    <label className="block text-neutral-400 text-sm mb-2 ml-1">Local do Vestígio</label>
-                    <input
-                        type="text"
-                        value={formData.local}
-                        onChange={(e) => setFormData({ ...formData, local: e.target.value })}
-                        className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none"
-                        placeholder="Ex: Janela da cozinha..."
-                    />
-                </div>
+                {/* Local Field Removed as requested */}
 
                 <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -109,38 +96,36 @@ export const Step4Decal: React.FC<StepProps> = ({ state, updateState, nextStep, 
                         />
                     </div>
                     <div>
-                        <label className="block text-neutral-400 text-sm mb-2 ml-1">Fitas Utilizadas</label>
+                        <label className="block text-neutral-400 text-sm mb-2 ml-1">Numeração da Fita</label>
                         <input 
-                            type="number" 
-                            min="1"
-                            value={formData.fitas}
-                            onChange={(e) => setFormData({ ...formData, fitas: parseInt(e.target.value) })}
+                            type="text" 
+                            value={formData.numeracao_fitas}
+                            onChange={(e) => setFormData({ ...formData, numeracao_fitas: e.target.value })}
                             className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none text-center"
+                            placeholder="Ex: 1-5 ou 10, 12"
                         />
                     </div>
                 </div>
 
                 <button
                     onClick={addVestigio}
-                    className="w-full bg-yellow-500 text-black font-bold py-4 rounded-lg uppercase tracking-wide shadow-lg shadow-yellow-500/20 mt-2"
+                    disabled={!formData.descricao || !formData.numeracao_fitas}
+                    className="w-full bg-yellow-500 text-black font-bold py-4 rounded-lg uppercase tracking-wide shadow-lg shadow-yellow-500/20 mt-2 disabled:opacity-50"
                 >
                     ADICIONAR + VESTÍGIOS
                 </button>
 
                 <div className="space-y-4 mt-6 pt-6 border-t border-neutral-800">
-                    <div>
-                        <label className="block text-neutral-400 text-sm mb-2 ml-1">Total de Fitas</label>
-                        <div className="w-full bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-lg py-4 px-4">
-                            {totalFitas > 0 ? totalFitas : "Somatório das Fitas Utilizadas"}
-                        </div>
-                    </div>
                     {/* List of items preview */}
                     {state.vestigios_decalcados.length > 0 && (
                       <div className="bg-neutral-900 p-4 rounded-lg border border-neutral-800">
                          <p className="text-xs text-neutral-500 uppercase mb-2">Itens Adicionados:</p>
                          {state.vestigios_decalcados.map((item, i) => (
                            <div key={item.id} className="text-sm text-neutral-300 border-b border-neutral-800 last:border-0 py-2 flex justify-between items-center group">
-                             <span>{item.quantidade}x {item.descricao} <span className="text-neutral-500 text-xs">({item.local})</span></span>
+                             <div className="flex flex-col">
+                                <span className="font-bold text-yellow-500">Fita(s): {item.numeracao_fitas}</span>
+                                <span>{item.quantidade}x {item.descricao}</span>
+                             </div>
                              <button onClick={() => removeVestigio(item.id)} className="text-neutral-600 hover:text-red-500 p-1">
                                 <X size={14} />
                              </button>

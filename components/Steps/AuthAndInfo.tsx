@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { AppState, OcorrenciaData } from '../../types';
-import { Search, Plus, ArrowRight, ArrowLeft, MapPin, ExternalLink, Loader2 } from 'lucide-react';
+import { Search, Plus, ArrowRight, ArrowLeft, MapPin, ExternalLink, Loader2, Crosshair } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { LOGO_URL } from '../../utils';
 
@@ -119,19 +120,45 @@ export const Step1Login: React.FC<StepProps> = ({ state, updateState, nextStep }
 // --- Step 2: Occurrence (Tela Ocorrência) ---
 export const Step2Occurrence: React.FC<StepProps> = ({ state, updateState, nextStep, prevStep }) => {
   const [numOcorrencia, setNumOcorrencia] = useState(state.num_ocorrencia);
+  const [localManual, setLocalManual] = useState(state.ocorrencia?.local || "");
+  const [gpsData, setGpsData] = useState(state.ocorrencia?.gps || "");
+  const [loadingGps, setLoadingGps] = useState(false);
   
   const handleSearch = async () => {
-     // Simulate fetch
+     // Simulate fetch or Create new
      if (numOcorrencia) {
         const mockData: OcorrenciaData = {
-            data_hora: new Date().toLocaleString('pt-BR'),
-            local: "SRES Quadra 08 Bloco A - Cruzeiro Velho",
+            data_hora: state.ocorrencia?.data_hora || new Date().toLocaleString('pt-BR'),
+            local: localManual || "Local não informado",
+            gps: gpsData,
             natureza: "Homicídio",
             equipe_padrao: ["Perito João (12345)", "Auxiliar Maria (67890)"]
         };
         updateState({ ocorrencia: mockData, num_ocorrencia: numOcorrencia });
         nextStep();
      }
+  };
+
+  const getGpsLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocalização não suportada pelo seu navegador.");
+      return;
+    }
+    setLoadingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const coords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        setGpsData(coords);
+        setLoadingGps(false);
+      },
+      (error) => {
+        console.error(error);
+        alert("Erro ao obter localização.");
+        setLoadingGps(false);
+      },
+      { enableHighAccuracy: true }
+    );
   };
 
   return (
@@ -151,12 +178,34 @@ export const Step2Occurrence: React.FC<StepProps> = ({ state, updateState, nextS
         </div>
 
         <div>
-            <label className="block text-neutral-400 text-sm mb-2 ml-1">DP de Registro</label>
+            <label className="block text-neutral-400 text-sm mb-2 ml-1">Local do Fato</label>
             <input
                 type="text"
-                className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none"
-                placeholder="Ex: 05"
+                value={localManual}
+                onChange={(e) => setLocalManual(e.target.value)}
+                className="w-full bg-neutral-800 text-white rounded-lg py-4 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500 border-none mb-2"
+                placeholder="Endereço exato"
             />
+            <div className="flex gap-2">
+                <div className="relative flex-1">
+                    <input
+                        type="text"
+                        value={gpsData}
+                        readOnly
+                        className="w-full bg-neutral-900 border border-neutral-800 text-yellow-500 text-xs rounded-lg py-3 px-4 pl-9 focus:outline-none"
+                        placeholder="Coordenadas GPS"
+                    />
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                </div>
+                <button 
+                    onClick={getGpsLocation}
+                    disabled={loadingGps}
+                    className="bg-neutral-800 text-yellow-500 px-4 rounded-lg flex items-center justify-center hover:bg-neutral-700 transition-colors border border-neutral-700"
+                    title="Obter localização atual"
+                >
+                    {loadingGps ? <Loader2 className="w-5 h-5 animate-spin" /> : <Crosshair className="w-5 h-5" />}
+                </button>
+            </div>
         </div>
 
         <div>
@@ -177,7 +226,7 @@ export const Step2Occurrence: React.FC<StepProps> = ({ state, updateState, nextS
              <span className="text-yellow-500 text-[10px] font-bold uppercase text-center leading-tight">Pesquisar<br/>Perícias</span>
           </button>
 
-          <button onClick={() => nextStep()} className="flex flex-col items-center justify-center space-y-2 group">
+          <button onClick={handleSearch} className="flex flex-col items-center justify-center space-y-2 group">
              <div className="w-16 h-16 rounded-full border-2 border-yellow-500 flex items-center justify-center group-active:bg-yellow-500/20 transition-colors">
                 <Plus className="text-yellow-500 w-8 h-8" />
              </div>
@@ -206,9 +255,11 @@ export const Step3Team: React.FC<StepProps> = ({ state, updateState, nextStep, p
     
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const locationContext = ocorrencia.gps ? `${ocorrencia.local} (GPS: ${ocorrencia.gps})` : ocorrencia.local;
+
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: `Please analyze the location "${ocorrencia.local}". Provide a brief summary of the area, nearby landmarks, and any relevant details for a police report context. Keep it concise.`,
+            contents: `Please analyze the location "${locationContext}". Provide a brief summary of the area, nearby landmarks, and any relevant details for a police report context. Keep it concise.`,
             config: {
                 tools: [{ googleMaps: {} }],
             },
@@ -245,8 +296,14 @@ export const Step3Team: React.FC<StepProps> = ({ state, updateState, nextStep, p
 
         <div>
             <label className="block text-neutral-400 text-sm mb-2 ml-1">Local do Fato</label>
-            <div className="w-full bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-lg py-3 px-4 min-h-[3rem] flex items-center">
-               {ocorrencia?.local || "---"}
+            <div className="w-full bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-lg py-3 px-4 min-h-[3rem] flex flex-col justify-center">
+               <span>{ocorrencia?.local || "---"}</span>
+               {ocorrencia?.gps && (
+                 <span className="text-yellow-600/80 text-xs flex items-center mt-1">
+                    <MapPin className="w-3 h-3 mr-1" />
+                    GPS: {ocorrencia.gps}
+                 </span>
+               )}
             </div>
             {ocorrencia?.local && (
                 <div className="mt-2">

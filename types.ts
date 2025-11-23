@@ -1,11 +1,9 @@
 
-
 export interface VestigioDecalcado {
   id: string;
   descricao: string;
-  fitas: number;
+  numeracao_fitas: string;
   suportes: number;
-  local?: string;
   quantidade?: number;
 }
 
@@ -39,6 +37,7 @@ export interface ArquivoGeral {
 export interface OcorrenciaData {
   data_hora: string;
   local: string;
+  gps?: string;
   natureza: string;
   equipe_padrao: string[];
 }

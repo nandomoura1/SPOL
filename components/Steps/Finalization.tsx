@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { AppState, ArquivoGeral } from '../../types';
 import { calculateSHA256, generateId, formatDateTime } from '../../utils';
@@ -262,10 +263,12 @@ export const Step8Report: React.FC<StepProps> = ({ state, prevStep }) => {
 
     const getVestigiosText = () => {
         if (state.houve_decalque !== 'Sim' || state.vestigios_decalcados.length === 0) return "R.: Não.";
-        const total = state.vestigios_decalcados.reduce((acc, curr) => acc + curr.fitas, 0); 
+        
+        // Count total items (quantity)
+        const total = state.vestigios_decalcados.reduce((acc, curr) => acc + (curr.quantidade || 1), 0); 
         
         const items = state.vestigios_decalcados.map((v) => 
-            `(${v.fitas}) ${v.descricao}`
+            `(Fitas: ${v.numeracao_fitas}) ${v.descricao}`
         );
         
         return (
@@ -313,55 +316,74 @@ export const Step8Report: React.FC<StepProps> = ({ state, prevStep }) => {
         );
     }
 
-    const handleGeneratePDF = () => {
+    const handleGeneratePDF = async () => {
         setIsGenerating(true);
         const element = document.getElementById('report-content');
+        let clone: HTMLElement | null = null;
         
         if (element && window.html2pdf) {
-            // Create a clone to force A4 width formatting regardless of screen size
-            const clone = element.cloneNode(true) as HTMLElement;
-            
-            // Set dimensions and styles for a perfect A4 PDF
-            clone.style.width = '210mm';
-            clone.style.maxWidth = '210mm';
-            clone.style.minHeight = '297mm';
-            clone.style.padding = '20mm';
-            clone.style.margin = '0';
-            clone.style.boxShadow = 'none';
-            clone.style.borderRadius = '0';
-            clone.style.backgroundColor = 'white';
-            clone.style.color = 'black';
-            clone.style.position = 'absolute';
-            clone.style.left = '-9999px'; // Hide it off-screen
-            clone.style.top = '0';
-            
-            // Remove any container classes that might restrict width
-            clone.classList.remove('print-container');
+            try {
+                // Clone the element to avoid modifying the visual DOM and to apply specific PDF styles
+                clone = element.cloneNode(true) as HTMLElement;
+                
+                // Set dimensions and styles for a perfect A4 PDF
+                // We move the clone off-screen but make it visible to the renderer
+                clone.style.width = '210mm';
+                clone.style.maxWidth = '210mm';
+                clone.style.minHeight = '297mm';
+                clone.style.padding = '20mm';
+                clone.style.margin = '0';
+                clone.style.boxShadow = 'none';
+                clone.style.borderRadius = '0';
+                clone.style.backgroundColor = 'white';
+                clone.style.color = 'black';
+                clone.style.position = 'absolute';
+                clone.style.left = '-9999px'; 
+                clone.style.top = '0';
+                
+                // Remove any container classes that might restrict width or apply dark mode
+                clone.classList.remove('print-container');
 
-            document.body.appendChild(clone);
-
-            const opt = {
-                margin:       0, // We handle margins via padding in the clone
-                filename:     `Laudo_${state.num_ocorrencia || 'PCDF'}.pdf`,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true, letterRendering: true, scrollY: 0 },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-            
-            window.html2pdf().set(opt).from(clone).save().then(() => {
-                // Cleanup
-                if (document.body.contains(clone)) {
-                    document.body.removeChild(clone);
+                // FIX: CORS issues often block images in html2canvas. 
+                // We fetch the logo, convert to Base64, and inject it into the clone.
+                const img = clone.querySelector('img') as HTMLImageElement;
+                if (img && img.src) {
+                     try {
+                         const resp = await fetch(img.src, { mode: 'cors' });
+                         const blob = await resp.blob();
+                         const base64 = await new Promise<string>((resolve) => {
+                             const reader = new FileReader();
+                             reader.onloadend = () => resolve(reader.result as string);
+                             reader.readAsDataURL(blob);
+                         });
+                         img.src = base64;
+                     } catch (e) {
+                         console.warn("PDF Logo conversion failed, falling back to URL. This may cause the logo to disappear if CORS fails.", e);
+                     }
                 }
-                setIsGenerating(false);
-            }).catch((err: any) => {
+
+                document.body.appendChild(clone);
+
+                const opt = {
+                    margin:       0, // We handle margins via padding in the clone
+                    filename:     `Laudo_${state.num_ocorrencia ? state.num_ocorrencia.replace(/[^a-z0-9]/gi, '_') : 'PCDF'}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true, letterRendering: true, scrollY: 0 },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                
+                await window.html2pdf().set(opt).from(clone).save();
+                
+            } catch (err: any) {
                 console.error("PDF Generation Error:", err);
-                if (document.body.contains(clone)) {
+                alert("Erro ao gerar PDF. Verifique se as imagens foram carregadas corretamente.");
+            } finally {
+                // Cleanup
+                if (clone && document.body.contains(clone)) {
                     document.body.removeChild(clone);
                 }
                 setIsGenerating(false);
-                alert("Erro ao gerar PDF. Verifique se as imagens foram carregadas.");
-            });
+            }
         } else {
             setIsGenerating(false);
             if (!window.html2pdf) alert("Biblioteca PDF não carregada. Tente recarregar a página.");
@@ -387,7 +409,10 @@ export const Step8Report: React.FC<StepProps> = ({ state, prevStep }) => {
                         />
                         <div className="font-bold text-lg uppercase mb-1 text-center">Instituto de Identificação da PCDF</div>
                         <div className="font-bold border-b-2 border-black inline-block pb-1 mb-2 text-base text-center">Laudo de Perícia Papiloscópica – Local de Crime</div>
-                        <div className="mt-2 font-semibold text-center">Ocorrência nº {state.num_ocorrencia || "_______"} – Local: {state.ocorrencia?.local || "Local não informado"}, Brasília/DF</div>
+                        <div className="mt-2 font-semibold text-center">
+                            Ocorrência nº {state.num_ocorrencia || "_______"} – Local: {state.ocorrencia?.local || "Local não informado"}, Brasília/DF
+                            {state.ocorrencia?.gps && <span className="block text-xs font-normal text-gray-600 mt-1">(Coordenadas GPS: {state.ocorrencia.gps})</span>}
+                        </div>
                     </div>
 
                     <div className="mb-6">
@@ -467,7 +492,7 @@ export const Step8Report: React.FC<StepProps> = ({ state, prevStep }) => {
                         <Download className="text-yellow-500 w-8 h-8" />
                     </div>
                     <span className="text-yellow-500 text-[10px] font-bold uppercase text-center leading-tight mt-2">
-                        {isGenerating ? "Gerando..." : "Baixar PDF"}
+                        {isGenerating ? "Gerando..." : "Baixar Laudo (PDF)"}
                     </span>
                 </button>
 
