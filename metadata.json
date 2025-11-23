@@ -1,0 +1,5 @@
+{
+  "name": "SPOL - PCDF",
+  "description": "Sistema de Perícias Online - A digital forensics reporting tool for collecting evidence, logging custody chains, and generating signed reports.",
+  "requestFramePermissions": []
+}
